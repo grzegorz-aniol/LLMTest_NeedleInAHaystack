@@ -95,15 +95,18 @@ class LLMMultiNeedleHaystackTester(LLMNeedleHaystackTester):
                 # tokens_new_context represents the tokens before the needle
                 tokens_new_context = tokens_context[:insertion_point]
 
-                # We want to make sure that we place our needle at a sentence break so we first see what token a '.' is
-                period_tokens = self.model_to_test.encode_text_to_tokens('.')
-                
-                # Then we iteration backwards until we find the first period
-                while tokens_new_context and tokens_new_context[-1] not in period_tokens:
-                    insertion_point -= 1
-                    tokens_new_context = tokens_context[:insertion_point]
+                # This may not work if period at the end of word is tokenized differently
+
+                # # We want to make sure that we place our needle at a sentence break so we first see what token a '.' is
+                # period_tokens = self.model_to_test.encode_text_to_tokens('.')
+                #
+                # # Then we iteration backwards until we find the first period
+                # while tokens_new_context and tokens_new_context[-1] not in period_tokens:
+                #     insertion_point -= 1
+                #     tokens_new_context = tokens_context[:insertion_point]
                     
                 # Insert the needle into the context at the found position
+                print("Insertion point: ", insertion_point)
                 tokens_context = tokens_context[:insertion_point] + tokens_needle + tokens_context[insertion_point:]
 
                 # Log 
