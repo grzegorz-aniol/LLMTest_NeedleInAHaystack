@@ -188,6 +188,7 @@ The package `needlehaystack` is available for import in your test cases. Develop
 - `results_version` - You may want to run your test multiple times for the same combination of length/depth, change the version number if so
 - `num_concurrent_requests` - Default: 1. Set higher if you'd like to run more requests in parallel. Keep in mind rate limits.
 - `save_results` - Whether or not you'd like to save your results to file. They will be temporarily saved in the object regardless. True/False. If `save_results = True`, then this script will populate a `result/` directory with evaluation information. Due to potential concurrent requests each new test will be saved as a few file.
+- `overwrite_results` - Default: `False`. When `True` (and `save_results` is also `True`), existing matching results are ignored and each configuration is always re-evaluated and written to disk.
 - `save_contexts` - Whether or not you'd like to save your contexts to file. **Warning** these will get very long. True/False
 - `final_context_length_buffer` - The amount of context to take off each input to account for system messages and output tokens. This can be more intelligent but using a static value for now. Default 200 tokens.
 - `context_lengths_min` - The starting point of your context lengths list to iterate

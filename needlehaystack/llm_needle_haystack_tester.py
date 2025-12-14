@@ -34,6 +34,7 @@ class LLMNeedleHaystackTester:
                  document_depth_percent_interval_type = "linear",
                  num_concurrent_requests = 1,
                  save_results = True,
+                 overwrite_results = False,
                  save_contexts = True,
                  final_context_length_buffer = 200,
                  seconds_to_sleep_between_completions = None,
@@ -74,6 +75,7 @@ class LLMNeedleHaystackTester:
         self.results_version = results_version
         self.num_concurrent_requests = num_concurrent_requests
         self.save_results = save_results
+        self.overwrite_results = overwrite_results
         self.final_context_length_buffer = final_context_length_buffer
         self.save_contexts = save_contexts
         self.seconds_to_sleep_between_completions = seconds_to_sleep_between_completions
@@ -138,7 +140,7 @@ class LLMNeedleHaystackTester:
     async def evaluate_and_log(self, context_length, depth_percent):
         # Checks to see if you've already checked a length/percent/version.
         # This helps if the program stop running and you want to restart later
-        if self.save_results:
+        if self.save_results and not self.overwrite_results:
             if self.result_exists(context_length, depth_percent):
                 print("Warning! Skipping evaluation - the result already exists for context length ", context_length, " and depth percent ", depth_percent)
                 return

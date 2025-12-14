@@ -160,7 +160,7 @@ class LLMMultiNeedleHaystackTester(LLMNeedleHaystackTester):
             context_length (int): The length of the context in tokens.
             depth_percent (float): The depth percent for needle insertion.
         """
-        if self.save_results:
+        if self.save_results and not self.overwrite_results:
             if self.result_exists(context_length, depth_percent):
                 return
 
