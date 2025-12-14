@@ -7,7 +7,7 @@ QUESTION_ANSWER = "Sky is blue"
 API_KEY = "abc"
 SCORE = 123
 TEMPERATURE = 0
-MODEL = "gpt-3.5-turbo-0125"
+MODEL = "gpt-5-mini"
 
 
 @patch('needlehaystack.evaluators.openai.ChatOpenAI')

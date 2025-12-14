@@ -34,6 +34,7 @@ class LLMNeedleHaystackTester:
                  document_depth_percent_interval_type = "linear",
                  num_concurrent_requests = 1,
                  save_results = True,
+                 overwrite_results = False,
                  save_contexts = True,
                  final_context_length_buffer = 200,
                  seconds_to_sleep_between_completions = None,
@@ -68,12 +69,13 @@ class LLMNeedleHaystackTester:
         if not needle or not haystack_dir or not retrieval_question:
             raise ValueError("Needle, haystack, and retrieval_question must be provided.")
 
-        self.needle = needle
+        self.needle = " " + needle + " " # Adding spaces to make sure needle is separated from other words
         self.haystack_dir = haystack_dir
         self.retrieval_question = retrieval_question
         self.results_version = results_version
         self.num_concurrent_requests = num_concurrent_requests
         self.save_results = save_results
+        self.overwrite_results = overwrite_results
         self.final_context_length_buffer = final_context_length_buffer
         self.save_contexts = save_contexts
         self.seconds_to_sleep_between_completions = seconds_to_sleep_between_completions
@@ -138,8 +140,9 @@ class LLMNeedleHaystackTester:
     async def evaluate_and_log(self, context_length, depth_percent):
         # Checks to see if you've already checked a length/percent/version.
         # This helps if the program stop running and you want to restart later
-        if self.save_results:
+        if self.save_results and not self.overwrite_results:
             if self.result_exists(context_length, depth_percent):
+                print("Warning! Skipping evaluation - the result already exists for context length ", context_length, " and depth percent ", depth_percent)
                 return
 
         # Go generate the required length context and place your needle statement in
@@ -182,7 +185,8 @@ class LLMNeedleHaystackTester:
             print (f"Score: {score}")
             print (f"Response: {response}\n")
 
-        context_file_location = f'{self.model_name.replace(".", "_")}_len_{context_length}_depth_{int(depth_percent*100)}'
+        model_name_safe = self.model_name.replace('.', '_').replace('/', '_').replace('\\', '_')
+        context_file_location = f'{model_name_safe}_len_{context_length}_depth_{int(depth_percent*100)}'
 
         if self.save_contexts:
             results['file_name'] = context_file_location
@@ -213,6 +217,7 @@ class LLMNeedleHaystackTester:
 
         results_dir = 'results/'
         if not os.path.exists(results_dir):
+            print("Results dir doesn't exist yet.")
             return False
         
         for filename in os.listdir(results_dir):
@@ -262,16 +267,19 @@ class LLMNeedleHaystackTester:
             # tokens_new_context represents the tokens before the needle
             tokens_new_context = tokens_context[:insertion_point]
 
-            # We want to make sure that we place our needle at a sentence break so we first see what token a '.' is
-            period_tokens = self.model_to_test.encode_text_to_tokens('.')
-            
-            # Then we iteration backwards until we find the first period
-            while tokens_new_context and tokens_new_context[-1] not in period_tokens:
-                insertion_point -= 1
-                tokens_new_context = tokens_context[:insertion_point]
+            # This may not work if period at the end of word is tokenized differently
+
+            # # We want to make sure that we place our needle at a sentence break so we first see what token a '.' is
+            # period_tokens = self.model_to_test.encode_text_to_tokens('.')
+            #
+            # # Then we iteration backwards until we find the first period
+            # while tokens_new_context and tokens_new_context[-1] not in period_tokens:
+            #     insertion_point -= 1
+            #     tokens_new_context = tokens_context[:insertion_point]
 
             # Once we get there, then add in your needle, and stick the rest of your context in on the other end.
             # Now we have a needle in a haystack
+            print("Insertion point: ", insertion_point)
             tokens_new_context += tokens_needle + tokens_context[insertion_point:]
 
         # Convert back to a string and return it
