@@ -25,4 +25,7 @@ dependencies = [
     "transformers>=4.57.3",
     "protobuf>=6.33.2",
     "sentencepiece>=0.2.1",
+    "pandas>=2.3.3",
+    "seaborn>=0.13.2",
+    "matplotlib>=3.10.8",
 ]
