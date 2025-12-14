@@ -8,6 +8,7 @@ import numpy as np
 
 from .evaluators import Evaluator
 from .providers import ModelProvider
+from .evaluation_context import EvaluationContext
 
 from asyncio import Semaphore
 from datetime import datetime, timezone
@@ -145,8 +146,17 @@ class LLMNeedleHaystackTester:
                 print("Warning! Skipping evaluation - the result already exists for context length ", context_length, " and depth percent ", depth_percent)
                 return
 
+        # Prepare evaluation context
+        evaluation_context = EvaluationContext(
+            model=self.model_name,
+            context_length=int(context_length),
+            depth_percent=float(depth_percent),
+            version=self.results_version,
+            needles=[self.needle],
+        )
+
         # Go generate the required length context and place your needle statement in
-        context = await self.generate_context(context_length, depth_percent)
+        context = await self.generate_context(context_length, depth_percent, evaluation_context)
 
         # Prepare your message to send to the model you're going to evaluate
         prompt = self.model_to_test.generate_prompt(context, self.retrieval_question)
@@ -162,18 +172,12 @@ class LLMNeedleHaystackTester:
         # Compare the reponse to the actual needle you placed
         score = self.evaluation_model.evaluate_response(response)
 
-        results = {
-            # 'context' : context, # Uncomment this line if you'd like to save the context the model was asked to retrieve from. Warning: This will become very large.
-            'model' : self.model_name,
-            'context_length' : int(context_length),
-            'depth_percent' : float(depth_percent),
-            'version' : self.results_version,
-            'needle' : self.needle,
-            'model_response' : response,
-            'score' : score,
-            'test_duration_seconds' : test_elapsed_time,
-            'test_timestamp_utc' : datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S%z')
-        }
+        evaluation_context.model_response = response
+        evaluation_context.score = score
+        evaluation_context.test_duration_seconds = test_elapsed_time
+        evaluation_context.test_timestamp_utc = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S%z')
+
+        results = evaluation_context.model_dump()
 
         self.testing_results.append(results)
 
@@ -182,6 +186,7 @@ class LLMNeedleHaystackTester:
             print (f"Duration: {test_elapsed_time:.1f} seconds")
             print (f"Context: {context_length} tokens")
             print (f"Depth: {depth_percent}%")
+            print (f"Insertion points (tokens): {evaluation_context.insertion_points}")
             print (f"Score: {score}")
             print (f"Response: {response}\n")
 
@@ -189,6 +194,7 @@ class LLMNeedleHaystackTester:
         context_file_location = f'{model_name_safe}_len_{context_length}_depth_{int(depth_percent*100)}'
 
         if self.save_contexts:
+            evaluation_context.file_name = context_file_location
             results['file_name'] = context_file_location
 
             # Save the context to file for retesting
@@ -232,7 +238,7 @@ class LLMNeedleHaystackTester:
                         return True
         return False
 
-    async def generate_context(self, context_length, depth_percent):
+    async def generate_context(self, context_length, depth_percent, evaluation_context=None):
         # Load up tiktoken so we navigate tokens more easily
 
         # Get your haystack dir files loaded into a string
@@ -242,7 +248,10 @@ class LLMNeedleHaystackTester:
         context = self.encode_and_trim(context, context_length)
 
         # Insert your random statement according to your depth percent
-        context = self.insert_needle(context, depth_percent, context_length)
+        context, insertion_point = self.insert_needle(context, depth_percent, context_length)
+
+        if evaluation_context is not None:
+            evaluation_context.insertion_points = [insertion_point]
 
         return context
     
@@ -259,6 +268,7 @@ class LLMNeedleHaystackTester:
 
         if depth_percent == 100:
             # If your depth percent is 100 (which means your needle is the last thing in the doc), throw it at the end
+            insertion_point = len(tokens_context)
             tokens_new_context = tokens_context + tokens_needle
         else:
             # Go get the position (in terms of tokens) to insert your needle
@@ -279,12 +289,11 @@ class LLMNeedleHaystackTester:
 
             # Once we get there, then add in your needle, and stick the rest of your context in on the other end.
             # Now we have a needle in a haystack
-            print("Insertion point: ", insertion_point)
             tokens_new_context += tokens_needle + tokens_context[insertion_point:]
 
         # Convert back to a string and return it
         new_context = self.model_to_test.decode_tokens(tokens_new_context)
-        return new_context
+        return new_context, insertion_point
 
     def get_context_length_in_tokens(self, context):
         return len(self.model_to_test.encode_text_to_tokens(context))
