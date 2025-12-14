@@ -22,4 +22,7 @@ dependencies = [
     "cohere>=5.20.0",
     "jsonargparse>=4.44.0",
     "python-dotenv>=1.2.1",
+    "transformers>=4.57.3",
+    "protobuf>=6.33.2",
+    "sentencepiece>=0.2.1",
 ]
