@@ -224,6 +224,31 @@ Other Parameters:
 
 <img src="img/Claude_2_1_testing.png" alt="GPT-4-128 Context Testing" width="800"/>
 
+## Bielik-11B-v2.6 Instruct (Q8_0, local)
+
+![Bielik-11B-v2.6 Instruct Q8_0 Needle In A Haystack results](original_results/Bielik-v2.6-11B-Q8_0/Bielik-v2.6-11B-Q8_0-heapmap.png)
+
+**Model inference**
+
+```zsh
+llama-server --port 1234 -c 32768 -m ./Bielik-11B-v2.6-Instruct-GGUF/Bielik-11B-v2.6-Instruct.Q8_0.gguf
+```
+
+**Reproducing this run**
+
+```zsh
+uv run -- python3 -m needlehaystack.run \
+  --overwrite_results true \
+  --provider local --model_name Bielik-11B-v2.6-Instruct.Q8_0 \
+  --tokenizer_hf_id speakleash/Bielik-11B-v2.6-Instruct-MLX-8bit \
+  --evaluator openai \
+  --needle "Marcysia uwielbia mango ale tylko dojrzałe." \
+  --retrieval_question "Co uwielbia Marcysia?" \
+  --haystack_dir "Polish" \
+  --context_lengths "[4000, 8000, 16000, 32000]" \
+  --document_depth_percents "[0,25,50,75,100]" 
+```
+
 ## Multi Needle Evaluator
 
 To enable multi-needle insertion into our context, use `--multi_needle True`.
