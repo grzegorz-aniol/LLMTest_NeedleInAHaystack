@@ -7,7 +7,7 @@ from jsonargparse import CLI
 
 from . import LLMNeedleHaystackTester, LLMMultiNeedleHaystackTester
 from .evaluators import Evaluator, LangSmithEvaluator, OpenAIEvaluator
-from .providers import Anthropic, ModelProvider, OpenAI, Cohere
+from .providers import Anthropic, ModelProvider, OpenAI, Cohere, LocalOpenAI
 
 load_dotenv()
 
@@ -15,8 +15,9 @@ load_dotenv()
 class CommandArgs():
     provider: str = "openai"
     evaluator: str = "openai"
-    model_name: str = "gpt-5.1-mini"
-    evaluator_model_name: Optional[str] = "gpt-5.1-mini"
+    model_name: str = "gpt-5-mini"
+    evaluator_model_name: Optional[str] = "gpt-5-mini"
+    tokenizer_hf_id: Optional[str] = None
     needle: Optional[str] = "\nThe best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n"
     haystack_dir: Optional[str] = "PaulGrahamEssays"
     retrieval_question: Optional[str] = "What is the best thing to do in San Francisco?"
@@ -63,11 +64,16 @@ def get_model_to_test(args: CommandArgs) -> ModelProvider:
         case "openai":
             return OpenAI(model_name=args.model_name)
         case "local":
-            # Use an OpenAI-compatible local endpoint for the model under test.
+            # Use an OpenAI-compatible local endpoint for the model under test
+            # and a Hugging Face tokenizer for token counting.
             local_endpoint = os.getenv("NIAH_MODEL_LOCAL_API_ENDPOINT")
             if not local_endpoint:
                 raise ValueError("NIAH_MODEL_LOCAL_API_ENDPOINT must be set when provider is 'local'.")
-            return OpenAI(model_name=args.model_name, base_url=local_endpoint)
+            return LocalOpenAI(
+                model_name=args.model_name,
+                base_url=local_endpoint,
+                tokenizer_hf_id=args.tokenizer_hf_id,
+            )
         case "anthropic":
             return Anthropic(model_name=args.model_name)
         case "cohere":

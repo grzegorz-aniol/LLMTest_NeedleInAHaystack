@@ -20,14 +20,28 @@ The results from the original tests are in `/original_results`. The script has u
 
 ## Getting Started
 
-### Setup Virtual Environment
+### Setup with uv (recommended)
 
-We recommend setting up a virtual environment to isolate Python dependencies, ensuring project-specific packages without conflicting with system-wide installations.
+This project uses [uv](https://docs.astral.sh/uv/) as the Python package and environment manager.
+
+A minimal setup using Python 3.13 looks like this:
 
 ```zsh
-python3 -m venv venv
-source venv/bin/activate
+# 1. Create a Python 3.13 virtual environment in .venv
+uv venv -p 3.13 .venv
+
+# 2. Activate the environment (macOS / Linux)
+source .venv/bin/activate
+
+# 3. Install project dependencies from pyproject.toml / uv.lock
+uv sync
 ```
+
+> On Windows PowerShell, activate with:
+>
+> ```powershell
+> .venv\\Scripts\\Activate.ps1
+> ```
 
 ### Environment Variables
 
@@ -46,35 +60,36 @@ pip install needlehaystack
 
 ### Run Test
 
-Start using the package by calling the entry point `needlehaystack.run_test` from command line.
+Start using the package by calling the entry point `needlehaystack.run` from command line.
 
 You can then run the analysis on OpenAI, Local (OpenAI-compatible), Anthropic, or Cohere models with the following command line arguments:
 
 - `provider` - The provider of the model, available options are `openai`, `local`, `anthropic`, and `cohere`. `local` expects an OpenAI-compatible HTTP endpoint defined by `NIAH_MODEL_LOCAL_API_ENDPOINT`. Defaults to `openai`.
 - `evaluator` - The evaluator backend. Available options are `openai`, `local`, and `langsmith`. See more on `LangSmith` below. `openai` and `local` both use an OpenAI-compatible chat model; `local` sends requests to the endpoint defined by `NIAH_EVALUATOR_LOCAL_API_ENDPOINT`. Defaults to `openai`.
-- `model_name` - Model name of the language model accessible by the provider. Defaults to `gpt-5.1-mini`
-- `evaluator_model_name` - Model name of the language model accessible by the evaluator. Defaults to `gpt-5.1-mini`
+- `model_name` - Model name of the language model accessible by the provider. Defaults to `gpt-5-mini`
+- `evaluator_model_name` - Model name of the language model accessible by the evaluator. Defaults to `gpt-5-mini`
+- `tokenizer_hf_id` - *(Optional, only used with `--provider local`)* Hugging Face model id used **only** for tokenization when calling a local OpenAI-compatible endpoint. If set, this id is passed to `AutoTokenizer.from_pretrained`. If omitted, `model_name` is used for both the server and tokenizer.
 
 Additionally, `LLMNeedleHaystackTester` parameters can also be passed as command line arguments, except `model_to_test` and `evaluator`.
 
 Here are some example use cases.
 
-Following command runs the test for openai model `gpt-5.1-mini` for a single context length of 2000 and single document depth of 50%.
+Following command runs the test for openai model `gpt-5-mini` for a single context length of 2000 and single document depth of 50%.
 
 ```zsh
-needlehaystack.run_test --provider openai --model_name "gpt-5.1-mini" --document_depth_percents "[50]" --context_lengths "[2000]"
+needlehaystack.run --provider openai --model_name "gpt-5-mini" --document_depth_percents "[50]" --context_lengths "[2000]"
 ```
 
 Following command runs the test for anthropic model `claude-2.1` for a single context length of 2000 and single document depth of 50%.
 
 ```zsh
-needlehaystack.run_test --provider anthropic --model_name "claude-2.1" --document_depth_percents "[50]" --context_lengths "[2000]"
+needlehaystack.run --provider anthropic --model_name "claude-2.1" --document_depth_percents "[50]" --context_lengths "[2000]"
 ```
 
 Following command runs the test for cohere model `command-r` for a single context length of 2000 and single document depth of 50%.
 
 ```zsh
-needlehaystack.run_test --provider cohere --model_name "command-r" --document_depth_percents "[50]" --context_lengths "[2000]"
+needlehaystack.run --provider cohere --model_name "command-r" --document_depth_percents "[50]" --context_lengths "[2000]"
 ```
 
 #### Examples using a local OpenAI-compatible endpoint
@@ -88,10 +103,10 @@ export NIAH_MODEL_API_KEY="dummy-key"          # still required
 export NIAH_EVALUATOR_API_KEY="dummy-key"      # still required
 export NIAH_MODEL_LOCAL_API_ENDPOINT="http://localhost:8080/v1"
 
-needlehaystack.run_test \
+needlehaystack.run \
   --provider local \
   --evaluator openai \
-  --model_name "gpt-5.1-mini" \
+  --model_name "gpt-5-mini" \
   --document_depth_percents "[50]" \
   --context_lengths "[2000]"
 ```
@@ -103,11 +118,11 @@ export NIAH_MODEL_API_KEY="your-openai-api-key"
 export NIAH_EVALUATOR_API_KEY="dummy-key"      # still required
 export NIAH_EVALUATOR_LOCAL_API_ENDPOINT="http://localhost:8081/v1"
 
-needlehaystack.run_test \
+needlehaystack.run \
   --provider openai \
   --evaluator local \
-  --model_name "gpt-5.1-mini" \
-  --evaluator_model_name "gpt-5.1-mini" \
+  --model_name "gpt-5-mini" \
+  --evaluator_model_name "gpt-5-mini" \
   --document_depth_percents "[50]" \
   --context_lengths "[2000]"
 ```
@@ -120,11 +135,32 @@ export NIAH_EVALUATOR_API_KEY="dummy-key"
 export NIAH_MODEL_LOCAL_API_ENDPOINT="http://localhost:8080/v1"
 export NIAH_EVALUATOR_LOCAL_API_ENDPOINT="http://localhost:8081/v1"
 
-needlehaystack.run_test \
+needlehaystack.run \
   --provider local \
   --evaluator local \
-  --model_name "gpt-5.1-mini" \
-  --evaluator_model_name "gpt-5.1-mini" \
+  --model_name "gpt-5-mini" \
+  --evaluator_model_name "gpt-5-mini" \
+  --document_depth_percents "[50]" \
+  --context_lengths "[2000]"
+```
+
+**Local model with separate HF tokenizer id**
+
+Sometimes the model name your local server expects is different from the Hugging Face
+model id you want to use for tokenization. In that case, you can use `--tokenizer_hf_id`
+with the `local` provider.
+
+The following example uses a local model name `"Bielik-v2.6-Instruct"` while using the
+Hugging Face tokenizer from `"speakleash/Bielik-11B-v2.6-Instruct"`:
+
+```zsh
+export NIAH_MODEL_API_KEY="dummy-key"
+export NIAH_MODEL_LOCAL_API_ENDPOINT="http://localhost:8080/v1"
+
+needlehaystack.run \
+  --provider local \
+  --model_name "Bielik-v2.6-Instruct" \
+  --tokenizer_hf_id "speakleash/Bielik-11B-v2.6-Instruct" \
   --document_depth_percents "[50]" \
   --context_lengths "[2000]"
 ```
@@ -134,10 +170,10 @@ needlehaystack.run_test \
 1. Fork and clone the repository.
 2. Create and activate the virtual environment as described above.
 3. Set the environment variables as described above.
-4. Install the package in editable mode by running the following command from repository root:
+4. Install the dependencies (and the package in editable mode) from `pyproject.toml` / `uv.lock`:
 
 ```zsh
-pip install -e .
+uv sync
 ```
 
 The package `needlehaystack` is available for import in your test cases. Develop, make changes and test locally.
@@ -173,7 +209,7 @@ The package `needlehaystack` is available for import in your test cases. Develop
 
 Other Parameters:
 
-- `model_name` - The name of the model you'd like to use. Should match the exact value which needs to be passed to the api. Ex: For OpenAI inference and evaluator models it would be `gpt-5.1-mini`.
+- `model_name` - The name of the model you'd like to use. Should match the exact value which needs to be passed to the api. Ex: For OpenAI inference and evaluator models it would be `gpt-5-mini`.
 
 ## Results Visualization
 
@@ -243,7 +279,7 @@ https://smith.langchain.com/public/74d2af1c-333d-4a73-87bc-a837f8f0f65c/d
 Here is the command to run this using multi-needle eval and passing the relevant needles:
 
 ```
-needlehaystack.run_test --evaluator langsmith --context_lengths_num_intervals 3 --document_depth_percent_intervals 3 --provider openai --model_name "gpt-4-0125-preview" --multi_needle True --eval_set multi-needle-eval-pizza --needles '["Figs are one of the three most delicious pizza toppings.", "Prosciutto is one of the three most delicious pizza toppings.", "Goat cheese is one of the three most delicious pizza toppings."]'
+needlehaystack.run --evaluator langsmith --context_lengths_num_intervals 3 --document_depth_percent_intervals 3 --provider openai --model_name "gpt-4-0125-preview" --multi_needle True --eval_set multi-needle-eval-pizza --needles '["Figs are one of the three most delicious pizza toppings.", "Prosciutto is one of the three most delicious pizza toppings.", "Goat cheese is one of the three most delicious pizza toppings."]'
 ```
 
 ## License

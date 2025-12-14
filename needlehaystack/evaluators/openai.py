@@ -4,7 +4,7 @@ from typing import Optional
 from .evaluator import Evaluator
 
 from langchain_classic.evaluation import load_evaluator
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 
 class OpenAIEvaluator(Evaluator):
     DEFAULT_MODEL_KWARGS: dict = dict(temperature=0)
@@ -17,7 +17,7 @@ class OpenAIEvaluator(Evaluator):
                 Only respond with a numberical score"""}
 
     def __init__(self,
-                 model_name: str = "gpt-5.1-mini",
+                 model_name: str = "gpt-5-mini",
                  model_kwargs: dict = DEFAULT_MODEL_KWARGS,
                  true_answer: str = None,
                  question_asked: str = None,
