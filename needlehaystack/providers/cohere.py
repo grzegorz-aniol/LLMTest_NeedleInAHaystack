@@ -3,8 +3,8 @@ import pkg_resources
 
 from operator import itemgetter
 from typing import Optional
-from langchain.prompts import PromptTemplate
-from langchain_cohere import ChatCohere
+from langchain_classic.prompts import PromptTemplate
+from langchain_community.chat_models import ChatCohere
 
 from cohere import Client, AsyncClient
 

@@ -1,8 +1,9 @@
 import os
+from typing import Optional
 
 from .evaluator import Evaluator
 
-from langchain.evaluation import load_evaluator
+from langchain_classic.evaluation import load_evaluator
 from langchain_community.chat_models import ChatOpenAI
 
 class OpenAIEvaluator(Evaluator):
@@ -16,10 +17,11 @@ class OpenAIEvaluator(Evaluator):
                 Only respond with a numberical score"""}
 
     def __init__(self,
-                 model_name: str = "gpt-3.5-turbo-0125",
+                 model_name: str = "gpt-5.1-mini",
                  model_kwargs: dict = DEFAULT_MODEL_KWARGS,
                  true_answer: str = None,
-                 question_asked: str = None,):
+                 question_asked: str = None,
+                 base_url: Optional[str] = None,):
         """
         :param model_name: The name of the model.
         :param model_kwargs: Model configuration. Default is {temperature: 0}
@@ -40,6 +42,12 @@ class OpenAIEvaluator(Evaluator):
             raise ValueError("NIAH_EVALUATOR_API_KEY must be in env for using openai evaluator.")
 
         self.api_key = api_key
+        self.base_url = base_url
+
+        if self.base_url:
+            # ChatOpenAI from langchain_community does not currently accept a base_url argument
+            # directly for all versions, but it will honor the OPENAI_BASE_URL environment variable.
+            os.environ["OPENAI_BASE_URL"] = self.base_url
         
         self.evaluator = ChatOpenAI(model=self.model_name,
                                     openai_api_key=self.api_key,

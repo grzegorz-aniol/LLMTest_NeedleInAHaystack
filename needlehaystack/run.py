@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional
+import os
 
 from dotenv import load_dotenv
 from jsonargparse import CLI
@@ -14,8 +15,8 @@ load_dotenv()
 class CommandArgs():
     provider: str = "openai"
     evaluator: str = "openai"
-    model_name: str = "gpt-3.5-turbo-0125"
-    evaluator_model_name: Optional[str] = "gpt-3.5-turbo-0125"
+    model_name: str = "gpt-5.1-mini"
+    evaluator_model_name: Optional[str] = "gpt-5.1-mini"
     needle: Optional[str] = "\nThe best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.\n"
     haystack_dir: Optional[str] = "PaulGrahamEssays"
     retrieval_question: Optional[str] = "What is the best thing to do in San Francisco?"
@@ -61,6 +62,12 @@ def get_model_to_test(args: CommandArgs) -> ModelProvider:
     match args.provider.lower():
         case "openai":
             return OpenAI(model_name=args.model_name)
+        case "local":
+            # Use an OpenAI-compatible local endpoint for the model under test.
+            local_endpoint = os.getenv("NIAH_MODEL_LOCAL_API_ENDPOINT")
+            if not local_endpoint:
+                raise ValueError("NIAH_MODEL_LOCAL_API_ENDPOINT must be set when provider is 'local'.")
+            return OpenAI(model_name=args.model_name, base_url=local_endpoint)
         case "anthropic":
             return Anthropic(model_name=args.model_name)
         case "cohere":
@@ -86,6 +93,15 @@ def get_evaluator(args: CommandArgs) -> Evaluator:
             return OpenAIEvaluator(model_name=args.evaluator_model_name,
                                    question_asked=args.retrieval_question,
                                    true_answer=args.needle)
+        case "local":
+            # Use an OpenAI-compatible local endpoint for the evaluator.
+            local_endpoint = os.getenv("NIAH_EVALUATOR_LOCAL_API_ENDPOINT")
+            if not local_endpoint:
+                raise ValueError("NIAH_EVALUATOR_LOCAL_API_ENDPOINT must be set when evaluator is 'local'.")
+            return OpenAIEvaluator(model_name=args.evaluator_model_name,
+                                   question_asked=args.retrieval_question,
+                                   true_answer=args.needle,
+                                   base_url=local_endpoint)
         case "langsmith":
             return LangSmithEvaluator()
         case _:

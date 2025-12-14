@@ -2,7 +2,7 @@
 
 A simple 'needle in a haystack' analysis to test in-context retrieval ability of long context LLMs.
 
-Supported model providers: OpenAI, Anthropic, Cohere
+Supported model providers: OpenAI, Local (OpenAI-compatible), Anthropic, Cohere
 
 Get the behind the scenes on the [overview video](https://youtu.be/KwRRuiCCdmc).
 
@@ -31,8 +31,10 @@ source venv/bin/activate
 
 ### Environment Variables
 
-- `NIAH_MODEL_API_KEY` - API key for interacting with the model. Depending on the provider, this gets used appropriately with the correct sdk.
-- `NIAH_EVALUATOR_API_KEY` - API key to use if `openai` evaluation strategy is used.
+- `NIAH_MODEL_API_KEY` - API key for interacting with the model. Depending on the provider, this gets used appropriately with the correct sdk. Even for local OpenAI-compatible endpoints, this value must be set (it can be a dummy string if your server ignores it).
+- `NIAH_EVALUATOR_API_KEY` - API key to use if `openai` or `local` evaluation strategy is used. As with the model key, this must be set even when using a local OpenAI-compatible endpoint.
+- `NIAH_MODEL_LOCAL_API_ENDPOINT` - Base URL for an OpenAI-compatible HTTP endpoint to use when `--provider local` (for example, `http://localhost:8080/v1`).
+- `NIAH_EVALUATOR_LOCAL_API_ENDPOINT` - Base URL for an OpenAI-compatible HTTP endpoint to use when `--evaluator local` (for example, `http://localhost:8081/v1`).
 
 ### Install Package
 
@@ -46,21 +48,21 @@ pip install needlehaystack
 
 Start using the package by calling the entry point `needlehaystack.run_test` from command line.
 
-You can then run the analysis on OpenAI, Anthropic, or Cohere models with the following command line arguments:
+You can then run the analysis on OpenAI, Local (OpenAI-compatible), Anthropic, or Cohere models with the following command line arguments:
 
-- `provider` - The provider of the model, available options are `openai`, `anthropic`, and `cohere`. Defaults to `openai`
-- `evaluator` - The evaluator, which can either be a `model` or `LangSmith`. See more on `LangSmith` below. If using a `model`, only `openai` is currently supported. Defaults to `openai`.
-- `model_name` - Model name of the language model accessible by the provider. Defaults to `gpt-3.5-turbo-0125`
-- `evaluator_model_name` - Model name of the language model accessible by the evaluator. Defaults to `gpt-3.5-turbo-0125`
+- `provider` - The provider of the model, available options are `openai`, `local`, `anthropic`, and `cohere`. `local` expects an OpenAI-compatible HTTP endpoint defined by `NIAH_MODEL_LOCAL_API_ENDPOINT`. Defaults to `openai`.
+- `evaluator` - The evaluator backend. Available options are `openai`, `local`, and `langsmith`. See more on `LangSmith` below. `openai` and `local` both use an OpenAI-compatible chat model; `local` sends requests to the endpoint defined by `NIAH_EVALUATOR_LOCAL_API_ENDPOINT`. Defaults to `openai`.
+- `model_name` - Model name of the language model accessible by the provider. Defaults to `gpt-5.1-mini`
+- `evaluator_model_name` - Model name of the language model accessible by the evaluator. Defaults to `gpt-5.1-mini`
 
 Additionally, `LLMNeedleHaystackTester` parameters can also be passed as command line arguments, except `model_to_test` and `evaluator`.
 
 Here are some example use cases.
 
-Following command runs the test for openai model `gpt-3.5-turbo-0125` for a single context length of 2000 and single document depth of 50%.
+Following command runs the test for openai model `gpt-5.1-mini` for a single context length of 2000 and single document depth of 50%.
 
 ```zsh
-needlehaystack.run_test --provider openai --model_name "gpt-3.5-turbo-0125" --document_depth_percents "[50]" --context_lengths "[2000]"
+needlehaystack.run_test --provider openai --model_name "gpt-5.1-mini" --document_depth_percents "[50]" --context_lengths "[2000]"
 ```
 
 Following command runs the test for anthropic model `claude-2.1` for a single context length of 2000 and single document depth of 50%.
@@ -74,6 +76,59 @@ Following command runs the test for cohere model `command-r` for a single contex
 ```zsh
 needlehaystack.run_test --provider cohere --model_name "command-r" --document_depth_percents "[50]" --context_lengths "[2000]"
 ```
+
+#### Examples using a local OpenAI-compatible endpoint
+
+The `local` provider and evaluator let you point this tool at your own OpenAI-compatible HTTP servers.
+
+**Local model with OpenAI evaluator**
+
+```zsh
+export NIAH_MODEL_API_KEY="dummy-key"          # still required
+export NIAH_EVALUATOR_API_KEY="dummy-key"      # still required
+export NIAH_MODEL_LOCAL_API_ENDPOINT="http://localhost:8080/v1"
+
+needlehaystack.run_test \
+  --provider local \
+  --evaluator openai \
+  --model_name "gpt-5.1-mini" \
+  --document_depth_percents "[50]" \
+  --context_lengths "[2000]"
+```
+
+**OpenAI model with local evaluator**
+
+```zsh
+export NIAH_MODEL_API_KEY="your-openai-api-key"
+export NIAH_EVALUATOR_API_KEY="dummy-key"      # still required
+export NIAH_EVALUATOR_LOCAL_API_ENDPOINT="http://localhost:8081/v1"
+
+needlehaystack.run_test \
+  --provider openai \
+  --evaluator local \
+  --model_name "gpt-5.1-mini" \
+  --evaluator_model_name "gpt-5.1-mini" \
+  --document_depth_percents "[50]" \
+  --context_lengths "[2000]"
+```
+
+**Local model and local evaluator (two endpoints)**
+
+```zsh
+export NIAH_MODEL_API_KEY="dummy-key"
+export NIAH_EVALUATOR_API_KEY="dummy-key"
+export NIAH_MODEL_LOCAL_API_ENDPOINT="http://localhost:8080/v1"
+export NIAH_EVALUATOR_LOCAL_API_ENDPOINT="http://localhost:8081/v1"
+
+needlehaystack.run_test \
+  --provider local \
+  --evaluator local \
+  --model_name "gpt-5.1-mini" \
+  --evaluator_model_name "gpt-5.1-mini" \
+  --document_depth_percents "[50]" \
+  --context_lengths "[2000]"
+```
+
 ### For Contributors
 
 1. Fork and clone the repository.
@@ -118,7 +173,7 @@ The package `needlehaystack` is available for import in your test cases. Develop
 
 Other Parameters:
 
-- `model_name` - The name of the model you'd like to use. Should match the exact value which needs to be passed to the api. Ex: For OpenAI inference and evaluator models it would be `gpt-3.5-turbo-0125`.
+- `model_name` - The name of the model you'd like to use. Should match the exact value which needs to be passed to the api. Ex: For OpenAI inference and evaluator models it would be `gpt-5.1-mini`.
 
 ## Results Visualization
 

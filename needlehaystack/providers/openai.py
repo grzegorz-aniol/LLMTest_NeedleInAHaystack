@@ -4,7 +4,7 @@ from typing import Optional
 
 from openai import AsyncOpenAI
 from langchain_openai import ChatOpenAI  
-from langchain.prompts import PromptTemplate
+from langchain_classic.prompts import PromptTemplate
 import tiktoken
 
 from .model import ModelProvider
@@ -25,14 +25,17 @@ class OpenAI(ModelProvider):
                                       temperature = 0)
 
     def __init__(self,
-                 model_name: str = "gpt-3.5-turbo-0125",
-                 model_kwargs: dict = DEFAULT_MODEL_KWARGS):
+                 model_name: str = "gpt-5.1-mini",
+                 model_kwargs: dict = DEFAULT_MODEL_KWARGS,
+                 base_url: Optional[str] = None):
         """
         Initializes the OpenAI model provider with a specific model.
 
         Args:
-            model_name (str): The name of the OpenAI model to use. Defaults to 'gpt-3.5-turbo-0125'.
+            model_name (str): The name of the OpenAI model to use. Defaults to 'gpt-5.1-mini'.
             model_kwargs (dict): Model configuration. Defaults to {max_tokens: 300, temperature: 0}.
+            base_url (Optional[str]): Optional base URL for an OpenAI-compatible endpoint. When provided,
+                requests will be sent to this endpoint instead of the default OpenAI API.
         
         Raises:
             ValueError: If NIAH_MODEL_API_KEY is not found in the environment.
@@ -44,7 +47,13 @@ class OpenAI(ModelProvider):
         self.model_name = model_name
         self.model_kwargs = model_kwargs
         self.api_key = api_key
-        self.model = AsyncOpenAI(api_key=self.api_key)
+        self.base_url = base_url
+
+        if self.base_url:
+            self.model = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+        else:
+            self.model = AsyncOpenAI(api_key=self.api_key)
+
         self.tokenizer = tiktoken.encoding_for_model(self.model_name)
     
     async def evaluate_model(self, prompt: str) -> str:
@@ -146,12 +155,14 @@ class OpenAI(ModelProvider):
             input_variables=["context", "question"],
         )
         # Create a LangChain runnable
-        model = ChatOpenAI(temperature=0, model=self.model_name)
+        if getattr(self, "base_url", None):
+            model = ChatOpenAI(temperature=0, model=self.model_name, base_url=self.base_url)
+        else:
+            model = ChatOpenAI(temperature=0, model=self.model_name)
+
         chain = ( {"context": lambda x: context,
                   "question": itemgetter("question")} 
                 | prompt 
                 | model 
                 )
         return chain
-    
-

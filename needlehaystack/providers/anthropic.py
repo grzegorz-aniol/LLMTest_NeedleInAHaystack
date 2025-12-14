@@ -7,7 +7,7 @@ from typing import Optional
 from anthropic import AsyncAnthropic
 from anthropic import Anthropic as AnthropicModel
 from langchain_anthropic import ChatAnthropic
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 
 from .model import ModelProvider
 
