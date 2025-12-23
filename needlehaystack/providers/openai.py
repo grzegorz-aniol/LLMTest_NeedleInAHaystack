@@ -8,7 +8,7 @@ from langchain_classic.prompts import PromptTemplate
 import tiktoken
 from transformers import AutoTokenizer
 
-from .model import ModelProvider
+from .model import ModelProvider, TokenTextPair
 
 
 class OpenAI(ModelProvider):
@@ -76,9 +76,14 @@ class OpenAI(ModelProvider):
             },
         ]
 
-    def encode_text_to_tokens(self, text: str) -> list[int]:
-        """Encode text into tokens using ``tiktoken``."""
-        return self.tokenizer.encode(text)
+    def encode_text_to_tokens(self, text: str) -> list[TokenTextPair]:
+        """Encode text into tokens using ``tiktoken`` and retain token strings."""
+        token_ids = self.tokenizer.encode(text)
+        token_bytes = self.tokenizer.decode_tokens_bytes(token_ids)
+        return [
+            (token_byte.decode("utf-8", errors="replace"), token_id)
+            for token_byte, token_id in zip(token_bytes, token_ids)
+        ]
 
     def decode_tokens(self, tokens: list[int], context_length: Optional[int] = None) -> str:
         """Decode tokens back into text using ``tiktoken``."""
@@ -188,14 +193,30 @@ class LocalOpenAI(ModelProvider):
             },
         ]
 
-    def encode_text_to_tokens(self, text: str) -> list[int]:
-        """Encode text into tokens using the Hugging Face tokenizer.
+    def encode_text_to_tokens(self, text: str) -> list[TokenTextPair]:
+        """Encode text into tokens using the Hugging Face tokenizer and retain spans."""
+        if not text:
+            return []
 
-        ``add_special_tokens`` is disabled so that token counts align more
-        closely with the raw input text, which is usually what the benchmark
-        cares about.
-        """
-        return self.tokenizer.encode(text, add_special_tokens=False)
+        encoding = self.tokenizer(
+            text,
+            add_special_tokens=False,
+            return_offsets_mapping=True,
+            return_attention_mask=False,
+            return_token_type_ids=False,
+        )
+        offsets = encoding.get("offset_mapping", [])
+        token_ids = encoding["input_ids"]
+
+        token_pairs: list[TokenTextPair] = []
+        for token_id, offset in zip(token_ids, offsets):
+            if offset is None or offset == (None, None):
+                token_text = self.tokenizer.convert_ids_to_tokens(token_id)
+            else:
+                start, end = offset
+                token_text = text[start:end]
+            token_pairs.append((token_text, token_id))
+        return token_pairs
 
     def decode_tokens(self, tokens: list[int], context_length: Optional[int] = None) -> str:
         """Decode tokens back into text using the Hugging Face tokenizer."""

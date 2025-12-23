@@ -76,26 +76,26 @@ class LLMMultiNeedleHaystackTester(LLMNeedleHaystackTester):
             tokens_needle = self.model_to_test.encode_text_to_tokens(needle)
 
             if depth_percent == 100:
-                # If your depth percent is 100 (which means your needle is the last thing in the doc), throw it at the end
                 insertion_point = len(tokens_context)
                 tokens_context = tokens_context + tokens_needle
             else:
-                # Go get the position (in terms of tokens) to insert your needle
                 insertion_point = int(len(tokens_context) * (depth_percent / 100))
-
-                # Insert the needle into the context at the found position
-                tokens_context = tokens_context[:insertion_point] + tokens_needle + tokens_context[insertion_point:]
+                insertion_point = self._find_sentence_boundary(tokens_context, insertion_point)
+                tokens_context = (
+                    tokens_context[:insertion_point]
+                    + tokens_needle
+                    + tokens_context[insertion_point:]
+                )
 
             insertion_points.append(insertion_point)
 
-            # Log 
             insertion_percentage = (insertion_point / len(tokens_context)) * 100
             self.insertion_percentages.append(insertion_percentage)
-            
-            # Adjust depth for next needle
-            depth_percent += depth_percent_interval  
 
-        new_context = self.model_to_test.decode_tokens(tokens_context)
+            depth_percent += depth_percent_interval
+
+        token_ids = self._tokens_to_ids(tokens_context)
+        new_context = self.model_to_test.decode_tokens(token_ids)
         return new_context, insertion_points
 
     def encode_and_trim(self, context, context_length):
@@ -111,7 +111,9 @@ class LLMMultiNeedleHaystackTester(LLMNeedleHaystackTester):
         """
         tokens = self.model_to_test.encode_text_to_tokens(context)
         if len(tokens) > context_length:
-            context = self.model_to_test.decode_tokens(tokens, context_length)
+            context = self.model_to_test.decode_tokens(
+                self._tokens_to_ids(tokens), context_length
+            )
         return context
 
     async def generate_context(self, context_length, depth_percent, evaluation_context: EvaluationContext | None = None):
@@ -263,7 +265,6 @@ class LLMMultiNeedleHaystackTester(LLMNeedleHaystackTester):
         print (f"- Needles: {self.needles}")
         print ("\n\n")
 
-    def start_test(self):
         if self.print_ongoing_status:
             self.print_start_test_summary()
         asyncio.run(self.run_test())

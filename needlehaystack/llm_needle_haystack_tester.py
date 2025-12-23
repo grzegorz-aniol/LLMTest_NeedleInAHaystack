@@ -13,10 +13,17 @@ from .evaluation_context import EvaluationContext
 from asyncio import Semaphore
 from datetime import datetime, timezone
 
+from .providers.model import TokenTextPair
+
+
 class LLMNeedleHaystackTester:
     """
     This class is used to test the LLM Needle Haystack.
     """
+
+    SENTENCE_ENDINGS = (".", "?", "!")
+    SENTENCE_TRAILING_CHARS = set('"\'”’)]}›»')
+
     def __init__(self,
                  model_to_test: ModelProvider = None,
                  evaluator: Evaluator = None,
@@ -70,7 +77,7 @@ class LLMNeedleHaystackTester:
         if not needle or not haystack_dir or not retrieval_question:
             raise ValueError("Needle, haystack, and retrieval_question must be provided.")
 
-        self.needle = " " + needle + " " # Adding spaces to make sure needle is separated from other words
+        self.needle = " " + needle + " "  # Adding spaces to make sure needle is separated from other words
         self.haystack_dir = haystack_dir
         self.retrieval_question = retrieval_question
         self.results_version = results_version
@@ -97,7 +104,7 @@ class LLMNeedleHaystackTester:
         if document_depth_percents is None:
             if document_depth_percent_min is None or document_depth_percent_max is None or document_depth_percent_intervals is None:
                 raise ValueError("Either document_depth_percent_min, document_depth_percent_max, document_depth_percent_intervals need to be filled out OR the document_depth_percents needs to be supplied.")
-            
+
             if document_depth_percent_interval_type == 'linear':
                 self.document_depth_percents = np.round(np.linspace(document_depth_percent_min, document_depth_percent_max, num=document_depth_percent_intervals, endpoint=True)).astype(int)
             elif document_depth_percent_interval_type == 'sigmoid':
@@ -106,10 +113,10 @@ class LLMNeedleHaystackTester:
                 raise ValueError("document_depth_percent_interval_type must be either 'sigmoid' or 'linear' if document_depth_percents is None.")
         else:
             self.document_depth_percents = document_depth_percents
-        
+
         self.model_to_test = model_to_test
         self.model_name = self.model_to_test.model_name
-        
+
         self.evaluation_model = evaluator
 
     def logistic(self, x, L=100, x0=50, k=.1):
@@ -117,10 +124,10 @@ class LLMNeedleHaystackTester:
             return x
         x = -k * (x - x0)
         return np.round(L * self.sigmoid(x), 3)
-    
+
     def sigmoid(self, x):
         return 1 / (1 + np.exp(-x))
-    
+
     async def bound_evaluate_and_log(self, sem, *args):
         async with sem:
             await self.evaluate_and_log(*args)
@@ -182,13 +189,13 @@ class LLMNeedleHaystackTester:
         self.testing_results.append(results)
 
         if self.print_ongoing_status:
-            print (f"-- Test Summary -- ")
-            print (f"Duration: {test_elapsed_time:.1f} seconds")
-            print (f"Context: {context_length} tokens")
-            print (f"Depth: {depth_percent}%")
-            print (f"Insertion points (tokens): {evaluation_context.insertion_points}")
-            print (f"Score: {score}")
-            print (f"Response: {response}\n")
+            print(f"-- Test Summary -- ")
+            print(f"Duration: {test_elapsed_time:.1f} seconds")
+            print(f"Context: {context_length} tokens")
+            print(f"Depth: {depth_percent}%")
+            print(f"Insertion points (tokens): {evaluation_context.insertion_points}")
+            print(f"Score: {score}")
+            print(f"Response: {response}\n")
 
         model_name_safe = self.model_name.replace('.', '_').replace('/', '_').replace('\\', '_')
         context_file_location = f'{model_name_safe}_len_{context_length}_depth_{int(depth_percent*100)}'
@@ -203,7 +210,7 @@ class LLMNeedleHaystackTester:
 
             with open(f'contexts/{context_file_location}_context.txt', 'w') as f:
                 f.write(context)
-            
+
         if self.save_results:
             # Save the context to file for retesting
             if not os.path.exists('results'):
@@ -225,7 +232,7 @@ class LLMNeedleHaystackTester:
         if not os.path.exists(results_dir):
             print("Results dir doesn't exist yet.")
             return False
-        
+
         for filename in os.listdir(results_dir):
             if filename.endswith('.json'):
                 with open(os.path.join(results_dir, filename), 'r') as f:
@@ -254,45 +261,64 @@ class LLMNeedleHaystackTester:
             evaluation_context.insertion_points = [insertion_point]
 
         return context
-    
+
+    @staticmethod
+    def _tokens_to_ids(tokens: list[TokenTextPair]) -> list[int]:
+        return [token_id for _, token_id in tokens]
+
+    def _has_sentence_ending(self, token_text: str) -> bool:
+        stripped = token_text.strip()
+        for ending in self.SENTENCE_ENDINGS:
+            idx = stripped.find(ending)
+            while idx != -1:
+                following = stripped[idx + 1:]
+                if not following or following.isspace() or all(
+                    ch in self.SENTENCE_TRAILING_CHARS for ch in following
+                ):
+                    return True
+                idx = stripped.find(ending, idx + 1)
+        return False
+
+    def _find_sentence_boundary(self, tokens: list[TokenTextPair], start_index: int) -> int:
+        if not tokens:
+            return 0
+
+        start_index = max(0, min(start_index, len(tokens)))
+
+        for idx in range(start_index, len(tokens)):
+            if self._has_sentence_ending(tokens[idx][0]):
+                return idx + 1
+
+        for idx in range(start_index - 1, -1, -1):
+            if self._has_sentence_ending(tokens[idx][0]):
+                return idx + 1
+
+        return start_index
+
     def insert_needle(self, context, depth_percent, context_length):
         tokens_needle = self.model_to_test.encode_text_to_tokens(self.needle)
         tokens_context = self.model_to_test.encode_text_to_tokens(context)
 
-        # Reducing the context length by 150 buffer. This is to account for system message, the user question, and response.
         context_length -= self.final_context_length_buffer
 
-        # If your context + needle are longer than the context length (which it will be), then reduce tokens from the context by the needle length
         if len(tokens_context) + len(tokens_needle) > context_length:
             tokens_context = tokens_context[:context_length - len(tokens_needle)]
 
         if depth_percent == 100:
-            # If your depth percent is 100 (which means your needle is the last thing in the doc), throw it at the end
             insertion_point = len(tokens_context)
             tokens_new_context = tokens_context + tokens_needle
         else:
-            # Go get the position (in terms of tokens) to insert your needle
             insertion_point = int(len(tokens_context) * (depth_percent / 100))
+            insertion_point = self._find_sentence_boundary(tokens_context, insertion_point)
+            tokens_new_context = (
+                tokens_context[:insertion_point]
+                + tokens_needle
+                + tokens_context[insertion_point:]
+            )
 
-            # tokens_new_context represents the tokens before the needle
-            tokens_new_context = tokens_context[:insertion_point]
-
-            # This may not work if period at the end of word is tokenized differently
-
-            # # We want to make sure that we place our needle at a sentence break so we first see what token a '.' is
-            # period_tokens = self.model_to_test.encode_text_to_tokens('.')
-            #
-            # # Then we iteration backwards until we find the first period
-            # while tokens_new_context and tokens_new_context[-1] not in period_tokens:
-            #     insertion_point -= 1
-            #     tokens_new_context = tokens_context[:insertion_point]
-
-            # Once we get there, then add in your needle, and stick the rest of your context in on the other end.
-            # Now we have a needle in a haystack
-            tokens_new_context += tokens_needle + tokens_context[insertion_point:]
-
-        # Convert back to a string and return it
-        new_context = self.model_to_test.decode_tokens(tokens_new_context)
+        new_context = self.model_to_test.decode_tokens(
+            self._tokens_to_ids(tokens_new_context)
+        )
         return new_context, insertion_point
 
     def get_context_length_in_tokens(self, context):
@@ -310,22 +336,31 @@ class LLMNeedleHaystackTester:
         return context
 
     def encode_and_trim(self, context, context_length):
-        tokens = self.model_to_test.encode_text_to_tokens(context)
-        if len(tokens) > context_length:
-            context = self.model_to_test.decode_tokens(tokens, context_length)
+        token_pairs = self.model_to_test.encode_text_to_tokens(context)
+        if len(token_pairs) > context_length:
+            context = self.model_to_test.decode_tokens(
+                self._tokens_to_ids(token_pairs), context_length
+            )
         return context
-    
+
+
     def get_results(self):
         return self.testing_results
-    
+
     def print_start_test_summary(self):
-        print ("\n")
-        print ("Starting Needle In A Haystack Testing...")
-        print (f"- Model: {self.model_name}")
-        print (f"- Context Lengths: {len(self.context_lengths)}, Min: {min(self.context_lengths)}, Max: {max(self.context_lengths)}")
-        print (f"- Document Depths: {len(self.document_depth_percents)}, Min: {min(self.document_depth_percents)}%, Max: {max(self.document_depth_percents)}%")
-        print (f"- Needle: {self.needle.strip()}")
-        print ("\n\n")
+        print("\n")
+        print("Starting Needle In A Haystack Testing...")
+        print(
+            f"- Model: {self.model_name}"
+        )
+        print(
+            f"- Context Lengths: {len(self.context_lengths)}, Min: {min(self.context_lengths)}, Max: {max(self.context_lengths)}"
+        )
+        print(
+            f"- Document Depths: {len(self.document_depth_percents)}, Min: {min(self.document_depth_percents)}%, Max: {max(self.document_depth_percents)}%"
+        )
+        print(f"- Needle: {self.needle.strip()}")
+        print("\n\n")
 
     def start_test(self):
         if self.print_ongoing_status:
