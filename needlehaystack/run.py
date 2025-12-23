@@ -1,6 +1,10 @@
 from dataclasses import dataclass, field
 from typing import Optional
 import os
+import sys
+from pathlib import Path
+
+RESULTS_DIR = Path("results").resolve()
 
 from dotenv import load_dotenv
 from jsonargparse import CLI
@@ -8,6 +12,7 @@ from jsonargparse import CLI
 from . import LLMNeedleHaystackTester, LLMMultiNeedleHaystackTester
 from .evaluators import Evaluator, LangSmithEvaluator, OpenAIEvaluator
 from .providers import Anthropic, ModelProvider, OpenAI, Cohere, LocalOpenAI
+from .viz.create_viz_from_llm_testing import VizConfig, generate_heatmap, NoResultsFoundError
 
 load_dotenv()
 
@@ -47,6 +52,7 @@ class CommandArgs():
         " Prosciutto is one of the secret ingredients needed to build the perfect pizza. ", 
         " Goat cheese is one of the secret ingredients needed to build the perfect pizza. "
     ])
+    viz_output_path: Optional[str] = None
 
 def get_model_to_test(args: CommandArgs) -> ModelProvider:
     """
@@ -82,6 +88,7 @@ def get_model_to_test(args: CommandArgs) -> ModelProvider:
         case _:
             raise ValueError(f"Invalid provider: {args.provider}")
 
+
 def get_evaluator(args: CommandArgs) -> Evaluator:
     """
     Selects and returns the appropriate evaluator based on the provided command arguments.
@@ -114,6 +121,7 @@ def get_evaluator(args: CommandArgs) -> Evaluator:
         case _:
             raise ValueError(f"Invalid evaluator: {args.evaluator}")
 
+
 def main():
     """
     The main function to execute the testing process based on command line arguments.
@@ -132,6 +140,17 @@ def main():
         print("Testing single-needle")
         tester = LLMNeedleHaystackTester(**args.__dict__)
     tester.start_test()
+
+    if args.viz_output_path:
+        try:
+            generate_heatmap(
+                VizConfig(
+                    results_dir=RESULTS_DIR,
+                    output_path=Path(args.viz_output_path),
+                )
+            )
+        except NoResultsFoundError as exc:
+            print(f"Unable to generate visualization: {exc}")
 
 if __name__ == "__main__":
     main()

@@ -188,6 +188,10 @@ class LocalOpenAI(ModelProvider):
                 "content": context,
             },
             {
+                "role": "assistant",
+                "content": "Ok.",
+            },
+            {
                 "role": "user",
                 "content": f"{retrieval_question} Don't give information outside the document or repeat your findings",
             },
