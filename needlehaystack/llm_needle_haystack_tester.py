@@ -77,7 +77,9 @@ class LLMNeedleHaystackTester:
         if not needle or not haystack_dir or not retrieval_question:
             raise ValueError("Needle, haystack, and retrieval_question must be provided.")
 
-        self.needle = " " + needle + " "  # Adding spaces to make sure needle is separated from other words
+        self.needle = needle
+        if self.needle[-1] != '.': # Make sure the needle ends with a period.
+            self.needle += '.'
         self.haystack_dir = haystack_dir
         self.retrieval_question = retrieval_question
         self.results_version = results_version
@@ -285,15 +287,19 @@ class LLMNeedleHaystackTester:
 
         start_index = max(0, min(start_index, len(tokens)))
 
-        for idx in range(start_index, len(tokens)):
-            if self._has_sentence_ending(tokens[idx][0]):
-                return idx + 1
+        if start_index == 0:
+            return 0
 
         for idx in range(start_index - 1, -1, -1):
             if self._has_sentence_ending(tokens[idx][0]):
                 return idx + 1
 
+        for idx in range(start_index, len(tokens)):
+            if self._has_sentence_ending(tokens[idx][0]):
+                return idx + 1
+
         return start_index
+
 
     def insert_needle(self, context, depth_percent, context_length):
         tokens_needle = self.model_to_test.encode_text_to_tokens(self.needle)
