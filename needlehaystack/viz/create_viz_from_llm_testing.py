@@ -1,7 +1,7 @@
 """Small CLI script to reproduce the Needle In A Haystack heatmap from JSON results.
 
 Usage:
-    uv run viz/create_viz_from_llm_testing.py /path/to/results_dir [output.png]
+    uv run needlehaystack/viz/create_viz_from_llm_testing.py /path/to/results_dir [output.png]
 
 The script expects JSON files with at least the following keys:
 - "depth_percent"  -> becomes "Document Depth"
@@ -11,18 +11,38 @@ The script expects JSON files with at least the following keys:
 It will aggregate scores by (Document Depth, Context Length) using the mean
 and then plot a heatmap similar to the original notebook.
 """
-
-from __future__ import annotations
-
 import sys
 import json
 import glob
 from pathlib import Path
 
+from dataclasses import dataclass
+from typing import Optional
+
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+
+
+class NoResultsFoundError(RuntimeError):
+    """Raised when no JSON result files are present for visualization."""
+
+
+@dataclass
+class VizConfig:
+    """Configuration for generating a visualization heatmap."""
+
+    results_dir: Path
+    output_path: Optional[Path] = None
+
+    def resolve(self) -> "VizConfig":
+        return VizConfig(
+            results_dir=self.results_dir.expanduser().resolve(),
+            output_path=self.output_path.expanduser().resolve()
+            if self.output_path is not None
+            else None,
+        )
 
 
 def get_model_name(results_dir: Path) -> str:
@@ -50,7 +70,7 @@ def build_dataframe(results_dir: Path) -> pd.DataFrame:
     json_files = glob.glob(pattern)
 
     if not json_files:
-        raise SystemExit(f"No JSON files found in directory: {results_dir}")
+        raise NoResultsFoundError(f"No JSON files found in directory: {results_dir}")
 
     data = []
     for file in json_files:
@@ -124,33 +144,36 @@ def plot_heatmap(
         plt.show()
 
 
+def generate_heatmap(config: VizConfig) -> None:
+    cfg = config.resolve()
+
+    if not cfg.results_dir.is_dir():
+        raise NoResultsFoundError(f"Not a directory or missing results: {cfg.results_dir}")
+
+    model_name = get_model_name(cfg.results_dir)
+    df = build_dataframe(cfg.results_dir)
+    if df.empty:
+        raise NoResultsFoundError(f"No rows to visualize in: {cfg.results_dir}")
+
+    pivot_table = build_pivot(df)
+    plot_heatmap(pivot_table, model_name, cfg.output_path)
+
+
 def main(argv: list[str]) -> None:
     if len(argv) < 2:
         script = Path(argv[0]).name
         msg = (
-            f"Usage: uv run viz/{script} /path/to/results_dir [output.png]\n"
-            "Example: uv run viz/create_viz_from_llm_testing.py "
+            f"Usage: uv run needlehaystack/viz/{script} /path/to/results_dir [output.png]\n"
+            "Example: uv run needlehaystack/viz/create_viz_from_llm_testing.py "
             "original_results/Anthropic_Original_Results heatmap.png"
         )
         raise SystemExit(msg)
 
-    results_dir = Path(argv[1]).expanduser().resolve()
-    if not results_dir.is_dir():
-        raise SystemExit(f"Not a directory: {results_dir}")
-
-    output_path: Path | None = None
-    if len(argv) >= 3:
-        output_path = Path(argv[2]).expanduser().resolve()
-
-    model_name = get_model_name(results_dir)
-
-    df = build_dataframe(results_dir)
-    print(df.head())
-    print(f"Loaded {len(df)} rows from {results_dir}")
-    print(f"Model: {model_name}")
-
-    pivot_table = build_pivot(df)
-    plot_heatmap(pivot_table, model_name, output_path)
+    config = VizConfig(
+        results_dir=Path(argv[1]),
+        output_path=Path(argv[2]) if len(argv) >= 3 else None,
+    )
+    generate_heatmap(config)
 
 
 if __name__ == "__main__":  # pragma: no cover
