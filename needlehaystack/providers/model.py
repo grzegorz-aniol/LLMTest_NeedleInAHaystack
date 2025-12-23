@@ -1,6 +1,8 @@
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, TypeAlias
+
+TokenTextPair: TypeAlias = tuple[str, int]
 
 class ModelProvider(ABC):
     @abstractmethod
@@ -10,7 +12,7 @@ class ModelProvider(ABC):
     def generate_prompt(self, context: str, retrieval_question: str) -> str | list[dict[str, str]]: ...
 
     @abstractmethod
-    def encode_text_to_tokens(self, text: str) -> list[int]: ...
+    def encode_text_to_tokens(self, text: str) -> list[TokenTextPair]: ...
 
     @abstractmethod
     def decode_tokens(self, tokens: list[int], context_length: Optional[int] = None) -> str: ...

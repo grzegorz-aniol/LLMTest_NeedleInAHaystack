@@ -9,7 +9,7 @@ from anthropic import Anthropic as AnthropicModel
 from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import PromptTemplate
 
-from .model import ModelProvider
+from .model import ModelProvider, TokenTextPair
 
 class Anthropic(ModelProvider):
     DEFAULT_MODEL_KWARGS: dict = dict(max_tokens_to_sample  = 300,
@@ -56,8 +56,15 @@ class Anthropic(ModelProvider):
             retrieval_question=retrieval_question,
             context=context)
     
-    def encode_text_to_tokens(self, text: str) -> list[int]:
-        return self.tokenizer.encode(text).ids
+    def encode_text_to_tokens(self, text: str) -> list[TokenTextPair]:
+        encoding = self.tokenizer.encode(text)
+        token_ids = encoding.ids
+        token_strings = getattr(encoding, "tokens", None)
+
+        if not token_strings:
+            token_strings = [self.tokenizer.decode([token_id]) for token_id in token_ids]
+
+        return list(zip(token_strings, token_ids))
     
     def decode_tokens(self, tokens: list[int], context_length: Optional[int] = None) -> str:
         # Assuming you have a different decoder for Anthropic

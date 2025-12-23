@@ -8,7 +8,7 @@ from langchain_community.chat_models import ChatCohere
 
 from cohere import Client, AsyncClient
 
-from .model import ModelProvider
+from .model import ModelProvider, TokenTextPair
 
 class Cohere(ModelProvider):
     DEFAULT_MODEL_KWARGS: dict = dict(max_tokens          = 50,
@@ -60,9 +60,18 @@ class Cohere(ModelProvider):
             }]
         )
     
-    def encode_text_to_tokens(self, text: str) -> list[int]:
-        if not text: return []
-        return Client().tokenize(text=text, model=self.model_name).tokens
+    def encode_text_to_tokens(self, text: str) -> list[TokenTextPair]:
+        if not text:
+            return []
+        response = Client().tokenize(text=text, model=self.model_name)
+        token_ids = response.tokens
+        token_strings = getattr(response, "token_strings", None) or []
+
+        if not token_strings:
+            # Fallback to detokenizing individual ids if strings unavailable
+            token_strings = [Client().detokenize(tokens=[token_id], model=self.model_name).text for token_id in token_ids]
+
+        return list(zip(token_strings, token_ids))
 
     def decode_tokens(self, tokens: list[int], context_length: Optional[int] = None) -> str:
         # Assuming you have a different decoder for Anthropic
